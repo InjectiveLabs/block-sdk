@@ -8,6 +8,7 @@ import (
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
+	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 )
 
 var _ Mempool = (*LanedMempool)(nil)
@@ -34,6 +35,9 @@ type (
 		// according to their priority. The first lane in the registry has the
 		// highest priority and the last lane has the lowest priority.
 		registry []Lane
+
+		// txIndex tracks which signers have pending transactions in which lanes.
+		txIndex *TxIndex
 	}
 )
 
@@ -49,6 +53,7 @@ func NewLanedMempool(
 	mempool := &LanedMempool{
 		logger:   logger,
 		registry: lanes,
+		txIndex:  NewTxIndex(),
 	}
 
 	if err := mempool.ValidateBasic(); err != nil {
@@ -80,6 +85,21 @@ func (m *LanedMempool) GetTxDistribution() map[string]uint64 {
 	return counts
 }
 
+// TODO remove me
+func GetTransactionSigners(tx sdk.Tx) ([][]byte, bool) {
+	sigTx, ok := tx.(authsigning.SigVerifiableTx)
+	if !ok {
+		return nil, false
+	}
+
+	signers, err := sigTx.GetSigners()
+	if err != nil {
+		return nil, false
+	}
+
+	return signers, true
+}
+
 // Insert will insert a transaction into the mempool. It inserts the transaction
 // into the first lane that it matches.
 func (m *LanedMempool) Insert(ctx context.Context, tx sdk.Tx) (err error) {
@@ -91,12 +111,46 @@ func (m *LanedMempool) Insert(ctx context.Context, tx sdk.Tx) (err error) {
 	}()
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	for _, lane := range m.registry {
+laneMatching:
+	for index, lane := range m.registry {
 		if lane.Match(sdkCtx, tx) {
-			return lane.Insert(ctx, tx)
+			sdkCtx.Logger().Info("\n\n\n LANE MATCHING START\n\n\n")
+
+			// TODO Use lane's `SignerExtractor` instead (needs to be added to the Lane interface).
+			signers, ok := GetTransactionSigners(tx)
+			if !ok {
+				m.logger.Error("failed to extract signers upon insertion for tx", "tx", tx)
+				return nil
+			}
+			for _, signer := range signers {
+				if m.txIndex.DoesExistInLowerPriorityLane(string(signer), index) {
+
+					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", string(signer), "index", index)
+
+					// If the transaction exists in a lower priority lane, do not insert it.
+					// This is because it could cause account sequence mismatches.
+					continue laneMatching
+				}
+
+				sdkCtx.Logger().Info("NOT EXISTS IN LOWER PRIORITY LANE", "signer", string(signer), "index", index)
+			}
+
+			sdkCtx.Logger().Info("INSERT INTO LANE", "index", index)
+			err = lane.Insert(ctx, tx)
+			if err != nil {
+				return err
+			}
+
+			for _, signer := range signers {
+				m.txIndex.Insert(string(signer), lane.Name(), index, tx)
+			}
+
+			sdkCtx.Logger().Info("\n\n\n LANE MATCHING END 1\n\n\n")
+			return nil
 		}
 	}
 
+	sdkCtx.Logger().Info("\n\n\n LANE MATCHING END 2\n\n\n")
 	return nil
 }
 
@@ -122,7 +176,23 @@ func (m *LanedMempool) Remove(tx sdk.Tx) (err error) {
 
 	for _, lane := range m.registry {
 		if lane.Contains(tx) {
-			return lane.Remove(tx)
+			err = lane.Remove(tx)
+			if err != nil {
+				return err
+			}
+
+			// TODO Use lane's `SignerExtractor` instead (needs to be added to the Lane interface).
+			signers, ok := GetTransactionSigners(tx)
+			if !ok {
+				m.logger.Error("failed to extract signers upon removal for tx", "tx", tx)
+				return nil
+			}
+
+			for _, signer := range signers {
+				m.txIndex.Remove(string(signer), lane.Name(), tx)
+			}
+
+			return nil
 		}
 	}
 
