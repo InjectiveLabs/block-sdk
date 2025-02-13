@@ -7,6 +7,7 @@ import (
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	signer_extraction "github.com/skip-mev/block-sdk/v2/adapters/signer_extraction_adapter"
 	"github.com/skip-mev/block-sdk/v2/block"
 )
 
@@ -136,6 +137,11 @@ func (l *BaseLane) TxDecoder() sdk.TxDecoder {
 // TxEncoder returns the tx encoder for the lane.
 func (l *BaseLane) TxEncoder() sdk.TxEncoder {
 	return l.cfg.TxEncoder
+}
+
+// SignerExtractor returns the signer extractor for the lane.
+func (l *BaseLane) SignerExtractor() signer_extraction.Adapter {
+	return l.cfg.SignerExtractor
 }
 
 // GetMaxBlockSpace returns the maximum amount of block space that the lane is

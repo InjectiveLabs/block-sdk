@@ -111,28 +111,28 @@ func (m *LanedMempool) Insert(ctx context.Context, tx sdk.Tx) (err error) {
 	}()
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+
 laneMatching:
 	for index, lane := range m.registry {
 		if lane.Match(sdkCtx, tx) {
 			sdkCtx.Logger().Info("\n\n\n LANE MATCHING START\n\n\n")
 
-			// TODO Use lane's `SignerExtractor` instead (needs to be added to the Lane interface).
-			signers, ok := GetTransactionSigners(tx)
-			if !ok {
-				m.logger.Error("failed to extract signers upon insertion for tx", "tx", tx)
+			signersData, err := lane.SignerExtractor().GetSigners(tx)
+			if err != nil {
+				m.logger.Error("failed to extract signers upon insertion for tx", "tx", tx, "err", err)
 				return nil
 			}
-			for _, signer := range signers {
-				if m.txIndex.DoesExistInLowerPriorityLane(string(signer), index) {
+			for _, signerData := range signersData {
+				if m.txIndex.DoesExistInLowerPriorityLane(string(signerData.Signer), index) {
 
-					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", string(signer), "index", index)
+					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", string(signerData.Signer), "index", index)
 
 					// If the transaction exists in a lower priority lane, do not insert it.
 					// This is because it could cause account sequence mismatches.
 					continue laneMatching
 				}
 
-				sdkCtx.Logger().Info("NOT EXISTS IN LOWER PRIORITY LANE", "signer", string(signer), "index", index)
+				sdkCtx.Logger().Info("NOT EXISTS IN LOWER PRIORITY LANE", "signer", string(signerData.Signer), "index", index)
 			}
 
 			sdkCtx.Logger().Info("INSERT INTO LANE", "index", index)
@@ -141,8 +141,8 @@ laneMatching:
 				return err
 			}
 
-			for _, signer := range signers {
-				m.txIndex.Insert(string(signer), lane.Name(), index, tx)
+			for _, signerData := range signersData {
+				m.txIndex.Insert(string(signerData.Signer), lane.Name(), index, tx)
 			}
 
 			sdkCtx.Logger().Info("\n\n\n LANE MATCHING END 1\n\n\n")
@@ -181,15 +181,14 @@ func (m *LanedMempool) Remove(tx sdk.Tx) (err error) {
 				return err
 			}
 
-			// TODO Use lane's `SignerExtractor` instead (needs to be added to the Lane interface).
-			signers, ok := GetTransactionSigners(tx)
-			if !ok {
-				m.logger.Error("failed to extract signers upon removal for tx", "tx", tx)
+			signersData, err := lane.SignerExtractor().GetSigners(tx)
+			if err != nil {
+				m.logger.Error("failed to extract signers upon removal for tx", "tx", tx, "err", err)
 				return nil
 			}
 
-			for _, signer := range signers {
-				m.txIndex.Remove(string(signer), lane.Name(), tx)
+			for _, signerData := range signersData {
+				m.txIndex.Remove(string(signerData.Signer), lane.Name(), tx)
 			}
 
 			return nil

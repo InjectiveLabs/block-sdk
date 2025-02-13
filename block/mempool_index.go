@@ -52,7 +52,6 @@ func (idx *TxIndex) Remove(signer string, laneName string, tx sdk.Tx) {
 
 	for i, entry := range entries {
 		if entry.LaneName == laneName && entry.Tx == tx {
-			// Remove this entry from the slice.
 			entries = append(entries[:i], entries[i+1:]...)
 			break
 		}

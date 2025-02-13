@@ -5,6 +5,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
 
+	signer_extraction "github.com/skip-mev/block-sdk/v2/adapters/signer_extraction_adapter"
 	"github.com/skip-mev/block-sdk/v2/block/proposals"
 	"github.com/skip-mev/block-sdk/v2/block/utils"
 )
@@ -74,6 +75,9 @@ type Lane interface {
 	// belongs to the lane including its priority, signer's, sequence number,
 	// size and more.
 	GetTxInfo(ctx sdk.Context, tx sdk.Tx) (utils.TxWithInfo, error)
+
+	// SignerExtractor returns the signer extractor for the lane.
+	SignerExtractor() signer_extraction.Adapter
 }
 
 // FindLane finds a Lanes from in an array of Lanes and returns it and its index if found.

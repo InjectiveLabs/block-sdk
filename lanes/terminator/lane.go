@@ -12,6 +12,8 @@ import (
 	"github.com/skip-mev/block-sdk/v2/block"
 	"github.com/skip-mev/block-sdk/v2/block/proposals"
 	"github.com/skip-mev/block-sdk/v2/block/utils"
+
+	signer_extraction "github.com/skip-mev/block-sdk/v2/adapters/signer_extraction_adapter"
 )
 
 const (
@@ -120,4 +122,9 @@ func (t Terminator) Compare(sdk.Context, sdk.Tx, sdk.Tx) (int, error) {
 // Priority is a no-op
 func (t Terminator) Priority(sdk.Context, sdk.Tx) any {
 	return 0
+}
+
+// SignerExtractor is a no-op
+func (t Terminator) SignerExtractor() signer_extraction.Adapter {
+	return nil
 }
