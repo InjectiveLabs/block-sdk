@@ -107,7 +107,7 @@ laneMatching:
 				return nil
 			}
 			for _, signerData := range signersData {
-				if m.txIndex.DoesExistInLowerPriorityLane(string(signerData.Signer), index) {
+				if m.txIndex.DoesExistInLowerPriorityLane(signerData.Signer.String(), index) {
 					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
 
 					// If the transaction exists in a lower priority lane, do not insert it.
