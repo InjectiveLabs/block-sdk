@@ -2,16 +2,15 @@ package block
 
 import (
 	"sync"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // LaneTxEntry holds a reference to a transaction that is already in the mempool,
 // along with the lane it belongs to and its priority.
 type LaneTxEntry struct {
-	LaneName     string // e.g. "mev", "default", "custom"
-	LanePriority int    // a numeric priority (lower number = higher priority)
-	Tx           sdk.Tx
+	LaneName              string // e.g. "mev", "default", "custom"
+	LanePriority          int    // a numeric priority (lower number = higher priority)
+	FirstSignerIdentifier string
+	FirstSignerNonce      uint64
 }
 
 // TxIndex maps signer addresses (as string) to a slice of entries.
@@ -28,20 +27,21 @@ func NewTxIndex() *TxIndex {
 }
 
 // Insert adds a transaction to the index.
-func (idx *TxIndex) Insert(signer string, laneName string, lanePriority int, tx sdk.Tx) {
+func (idx *TxIndex) Insert(signer string, laneName string, lanePriority int, firstSignerIdentifier string, firstSignerNonce uint64) {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 
 	entry := &LaneTxEntry{
-		LaneName:     laneName,
-		LanePriority: lanePriority,
-		Tx:           tx,
+		LaneName:              laneName,
+		LanePriority:          lanePriority,
+		FirstSignerIdentifier: firstSignerIdentifier,
+		FirstSignerNonce:      firstSignerNonce,
 	}
 	idx.index[signer] = append(idx.index[signer], entry)
 }
 
 // Remove deletes a transaction from the index.
-func (idx *TxIndex) Remove(signer string, laneName string, tx sdk.Tx) {
+func (idx *TxIndex) Remove(signer string, laneName string, firstSignerIdentifier string, firstSignerNonce uint64) {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 
@@ -51,7 +51,7 @@ func (idx *TxIndex) Remove(signer string, laneName string, tx sdk.Tx) {
 	}
 
 	for i, entry := range entries {
-		if entry.LaneName == laneName && entry.Tx == tx {
+		if entry.LaneName == laneName && entry.FirstSignerIdentifier == firstSignerIdentifier && entry.FirstSignerNonce == firstSignerNonce {
 			entries = append(entries[:i], entries[i+1:]...)
 			break
 		}

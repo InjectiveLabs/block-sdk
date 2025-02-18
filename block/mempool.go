@@ -8,7 +8,6 @@ import (
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkmempool "github.com/cosmos/cosmos-sdk/types/mempool"
-	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 )
 
 var _ Mempool = (*LanedMempool)(nil)
@@ -85,21 +84,6 @@ func (m *LanedMempool) GetTxDistribution() map[string]uint64 {
 	return counts
 }
 
-// TODO remove me
-func GetTransactionSigners(tx sdk.Tx) ([][]byte, bool) {
-	sigTx, ok := tx.(authsigning.SigVerifiableTx)
-	if !ok {
-		return nil, false
-	}
-
-	signers, err := sigTx.GetSigners()
-	if err != nil {
-		return nil, false
-	}
-
-	return signers, true
-}
-
 // Insert will insert a transaction into the mempool. It inserts the transaction
 // into the first lane that it matches.
 func (m *LanedMempool) Insert(ctx context.Context, tx sdk.Tx) (err error) {
@@ -124,15 +108,14 @@ laneMatching:
 			}
 			for _, signerData := range signersData {
 				if m.txIndex.DoesExistInLowerPriorityLane(string(signerData.Signer), index) {
-
-					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", string(signerData.Signer), "index", index)
+					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
 
 					// If the transaction exists in a lower priority lane, do not insert it.
 					// This is because it could cause account sequence mismatches.
 					continue laneMatching
 				}
 
-				sdkCtx.Logger().Info("NOT EXISTS IN LOWER PRIORITY LANE", "signer", string(signerData.Signer), "index", index)
+				sdkCtx.Logger().Info("NOT EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
 			}
 
 			sdkCtx.Logger().Info("INSERT INTO LANE", "index", index)
@@ -141,8 +124,13 @@ laneMatching:
 				return err
 			}
 
+			sig := signersData[0]
+			firstSignerIdentifier := sig.Signer.String()
+			firstSignerNonce := sig.Sequence
+
 			for _, signerData := range signersData {
-				m.txIndex.Insert(string(signerData.Signer), lane.Name(), index, tx)
+				sdkCtx.Logger().Info("INSERT INTO LANE", "name", lane.Name(), "signer", signerData.Signer.String(), "index", index)
+				m.txIndex.Insert(signerData.Signer.String(), lane.Name(), index, firstSignerIdentifier, firstSignerNonce)
 			}
 
 			sdkCtx.Logger().Info("\n\n\n LANE MATCHING END 1\n\n\n")
@@ -187,8 +175,12 @@ func (m *LanedMempool) Remove(tx sdk.Tx) (err error) {
 				return nil
 			}
 
+			sig := signersData[0]
+			firstSignerIdentifier := sig.Signer.String()
+			firstSignerNonce := sig.Sequence
+
 			for _, signerData := range signersData {
-				m.txIndex.Remove(string(signerData.Signer), lane.Name(), tx)
+				m.txIndex.Remove(signerData.Signer.String(), lane.Name(), firstSignerIdentifier, firstSignerNonce)
 			}
 
 			return nil
