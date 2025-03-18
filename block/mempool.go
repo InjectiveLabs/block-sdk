@@ -99,7 +99,7 @@ func (m *LanedMempool) Insert(ctx context.Context, tx sdk.Tx) (err error) {
 laneMatching:
 	for index, lane := range m.registry {
 		if lane.Match(sdkCtx, tx) {
-			sdkCtx.Logger().Info("\n\n\n LANE MATCHING START\n\n\n")
+			sdkCtx.Logger().Debug("\n\n\n LANE MATCHING START\n\n\n")
 
 			signersData, err := lane.SignerExtractor().GetSigners(tx)
 			if err != nil {
@@ -108,17 +108,17 @@ laneMatching:
 			}
 			for _, signerData := range signersData {
 				if m.txIndex.DoesExistInLowerPriorityLane(signerData.Signer.String(), index) {
-					sdkCtx.Logger().Info("EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
+					sdkCtx.Logger().Debug("EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
 
 					// If the transaction exists in a lower priority lane, do not insert it.
 					// This is because it could cause account sequence mismatches.
 					continue laneMatching
 				}
 
-				sdkCtx.Logger().Info("NOT EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
+				sdkCtx.Logger().Debug("NOT EXISTS IN LOWER PRIORITY LANE", "signer", signerData.Signer.String(), "name", lane.Name(), "index", index)
 			}
 
-			sdkCtx.Logger().Info("INSERT INTO LANE", "index", index)
+			sdkCtx.Logger().Debug("INSERT INTO LANE", "index", index)
 			err = lane.Insert(ctx, tx)
 			if err != nil {
 				return err
@@ -129,16 +129,16 @@ laneMatching:
 			firstSignerNonce := sig.Sequence
 
 			for _, signerData := range signersData {
-				sdkCtx.Logger().Info("INSERT INTO LANE", "name", lane.Name(), "signer", signerData.Signer.String(), "index", index)
+				sdkCtx.Logger().Debug("INSERT INTO LANE", "name", lane.Name(), "signer", signerData.Signer.String(), "index", index)
 				m.txIndex.Insert(signerData.Signer.String(), lane.Name(), index, firstSignerIdentifier, firstSignerNonce)
 			}
 
-			sdkCtx.Logger().Info("\n\n\n LANE MATCHING END 1\n\n\n")
+			sdkCtx.Logger().Debug("\n\n\n LANE MATCHING END 1\n\n\n")
 			return nil
 		}
 	}
 
-	sdkCtx.Logger().Info("\n\n\n LANE MATCHING END 2\n\n\n")
+	sdkCtx.Logger().Debug("\n\n\n LANE MATCHING END 2\n\n\n")
 	return nil
 }
 
