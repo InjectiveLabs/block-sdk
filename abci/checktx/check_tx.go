@@ -7,5 +7,5 @@ import (
 type (
 	// CheckTx is baseapp's CheckTx method that checks the validity of a
 	// transaction.
-	CheckTx func(req *cometabci.RequestCheckTx) (*cometabci.ResponseCheckTx, error)
+	CheckTx func(req *cometabci.CheckTxRequest) (*cometabci.CheckTxResponse, error)
 )

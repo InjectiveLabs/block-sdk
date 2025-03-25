@@ -239,8 +239,8 @@ NOTE: This example walks through setting up the MEV and Default lanes.
     // before they are inserted into the mempool. With the CheckTx, we can 
     // verify the bid transaction and all of the bundled transactions
     // before inserting the bid transaction into the mempool.
-    func (app *TestApp) CheckTx(req *cometabci.RequestCheckTx) 
-        (*cometabci.ResponseCheckTx, error) {
+    func (app *TestApp) CheckTx(req *cometabci.CheckTxRequest) 
+        (*cometabci.CheckTxResponse, error) {
         return app.checkTxHandler(req)
     }
 

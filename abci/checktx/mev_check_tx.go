@@ -94,7 +94,7 @@ func NewMEVCheckTxHandler(
 // otherwise the auction can be griefed. No state changes are applied to the state
 // during this process.
 func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
-	return func(req *cometabci.RequestCheckTx) (resp *cometabci.ResponseCheckTx, err error) {
+	return func(req *cometabci.CheckTxRequest) (resp *cometabci.CheckTxResponse, err error) {
 		defer func() {
 			if rec := recover(); rec != nil {
 				handler.baseApp.Logger().Error(
@@ -103,7 +103,7 @@ func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
 				)
 
 				err = fmt.Errorf("panic in check tx handler: %s", rec)
-				resp = sdkerrors.ResponseCheckTxWithEvents(
+				resp = sdkerrors.CheckTxResponseWithEvents(
 					err,
 					0,
 					0,
@@ -120,7 +120,7 @@ func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
 				"err", err,
 			)
 
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				fmt.Errorf("failed to decode tx: %w", err),
 				0,
 				0,
@@ -137,7 +137,7 @@ func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
 				"err", err,
 			)
 
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				fmt.Errorf("failed to get auction bid info: %w", err),
 				0,
 				0,
@@ -187,7 +187,7 @@ func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
 				}
 			}
 
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				fmt.Errorf("invalid bid tx: %w", err),
 				gasInfo.GasWanted,
 				gasInfo.GasUsed,
@@ -212,7 +212,7 @@ func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
 				"err", err,
 			)
 
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				fmt.Errorf("invalid bid tx; failed to insert bid transaction into mempool: %w", err),
 				gasInfo.GasWanted,
 				gasInfo.GasUsed,
@@ -221,7 +221,7 @@ func (handler *MEVCheckTxHandler) CheckTx() CheckTx {
 			), nil
 		}
 
-		return &cometabci.ResponseCheckTx{
+		return &cometabci.CheckTxResponse{
 			Code:      cometabci.CodeTypeOK,
 			GasWanted: int64(gasInfo.GasWanted),
 			GasUsed:   int64(gasInfo.GasUsed),
@@ -270,7 +270,7 @@ func (handler *MEVCheckTxHandler) ValidateBidTx(ctx sdk.Context, bidTx sdk.Tx, b
 
 // GetContextForBidTx is returns the latest committed state and sets the context given
 // the checkTx request.
-func (handler *MEVCheckTxHandler) GetContextForBidTx(req *cometabci.RequestCheckTx) sdk.Context {
+func (handler *MEVCheckTxHandler) GetContextForBidTx(req *cometabci.CheckTxRequest) sdk.Context {
 	// Retrieve the commit multi-store which is used to retrieve the latest committed state.
 	ms := handler.baseApp.CommitMultiStore().CacheMultiStore()
 
@@ -283,9 +283,9 @@ func (handler *MEVCheckTxHandler) GetContextForBidTx(req *cometabci.RequestCheck
 
 	// Set the context to the correct checking mode.
 	switch req.Type {
-	case cometabci.CheckTxType_New:
+	case cometabci.CHECK_TX_TYPE_CHECK:
 		ctx = ctx.WithIsCheckTx(true)
-	case cometabci.CheckTxType_Recheck:
+	case cometabci.CHECK_TX_TYPE_RECHECK:
 		ctx = ctx.WithIsReCheckTx(true)
 	default:
 		panic("unknown check tx type")

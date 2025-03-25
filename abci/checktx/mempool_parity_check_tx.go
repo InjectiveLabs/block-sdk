@@ -8,7 +8,7 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log"
-	cmtabci "github.com/cometbft/cometbft/abci/types"
+	cometabci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
@@ -55,14 +55,14 @@ func NewMempoolParityCheckTx(
 // CheckTx returns a CheckTx handler that wraps a given CheckTx handler and evicts txs that are not
 // in the app-side mempool on ReCheckTx.
 func (m MempoolParityCheckTx) CheckTx() CheckTx {
-	return func(req *cmtabci.RequestCheckTx) (checkRes *cmtabci.ResponseCheckTx, checkErr error) {
-		defer func(checkRes **cmtabci.ResponseCheckTx, checkErr *error) {
+	return func(req *cometabci.CheckTxRequest) (checkRes *cometabci.CheckTxResponse, checkErr error) {
+		defer func(checkRes **cometabci.CheckTxResponse, checkErr *error) {
 			if r := recover(); r != nil {
 				m.logger.Error("panic in CheckTx (MempoolParityCheckTx)", "panic", r)
 				debug.PrintStack()
 
 				if err, ok := r.(error); ok {
-					*checkRes = sdkerrors.ResponseCheckTxWithEvents(
+					*checkRes = sdkerrors.CheckTxResponseWithEvents(
 						err,
 						0,
 						0,
@@ -70,7 +70,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 						true,
 					)
 				} else {
-					*checkRes = sdkerrors.ResponseCheckTxWithEvents(
+					*checkRes = sdkerrors.CheckTxResponseWithEvents(
 						fmt.Errorf("panic in CheckTx (MempoolParityCheckTx): %v", r),
 						0,
 						0,
@@ -84,7 +84,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 		// decode tx
 		tx, err := m.txDecoder(req.Tx)
 		if err != nil {
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				fmt.Errorf("failed to decode tx: %w", err),
 				0,
 				0,
@@ -93,7 +93,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 			), nil
 		}
 
-		isReCheck := req.Type == cmtabci.CheckTxType_Recheck
+		isReCheck := req.Type == cometabci.CHECK_TX_TYPE_RECHECK
 		txInMempool := m.mempl.Contains(tx)
 
 		// if the mode is ReCheck and the app's mempool does not contain the given tx, we fail
@@ -104,7 +104,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 				"tx", tx,
 			)
 
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				fmt.Errorf("tx from comet mempool not found in app-side mempool"),
 				0,
 				0,
@@ -149,7 +149,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 			}
 
 			m.logger.Debug("failed to match lane", "lane", lane, "err", err)
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				err,
 				0,
 				0,
@@ -183,7 +183,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 				"max bytes", laneSizeBytes,
 			)
 
-			return sdkerrors.ResponseCheckTxWithEvents(
+			return sdkerrors.CheckTxResponseWithEvents(
 				errorsmod.Wrapf(sdkerrors.ErrTxTooLarge, "tx size exceeds max bytes for lane %s", lane.Name()),
 				0,
 				0,
@@ -219,13 +219,13 @@ func (m MempoolParityCheckTx) matchLane(ctx sdk.Context, tx sdk.Tx) (block.Lane,
 	return lane, nil
 }
 
-func isInvalidCheckTxExecution(resp *cmtabci.ResponseCheckTx, checkTxErr error) bool {
+func isInvalidCheckTxExecution(resp *cometabci.CheckTxResponse, checkTxErr error) bool {
 	return resp == nil || resp.Code != 0 || checkTxErr != nil
 }
 
 // GetContextForTx is returns the latest committed state and sets the context given
 // the checkTx request.
-func (m MempoolParityCheckTx) GetContextForTx(req *cmtabci.RequestCheckTx) sdk.Context {
+func (m MempoolParityCheckTx) GetContextForTx(req *cometabci.CheckTxRequest) sdk.Context {
 	// Retrieve the commit multi-store which is used to retrieve the latest committed state.
 	ms := m.baseApp.CommitMultiStore().CacheMultiStore()
 
