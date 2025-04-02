@@ -41,7 +41,7 @@ func (p *Proposal) UpdateProposal(lane Lane, partialProposal []utils.TxWithInfo)
 	partialProposalGasLimit := uint64(0)
 
 	for index, tx := range partialProposal {
-		p.Logger.Info(
+		p.Logger.Debug(
 			"updating proposal with tx",
 			"index", index+len(p.Txs),
 			"lane", lane.Name(),

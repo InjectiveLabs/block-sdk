@@ -87,7 +87,7 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 			}
 		}()
 
-		h.logger.Info(
+		h.logger.Debug(
 			"mempool distribution before proposal creation",
 			"distribution", h.mempool.GetTxDistribution(),
 			"height", req.Height,
@@ -105,7 +105,7 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 			return &abci.ResponsePrepareProposal{Txs: make([][]byte, 0)}, err
 		}
 
-		h.logger.Info(
+		h.logger.Debug(
 			"prepared proposal",
 			"num_txs", len(finalProposal.Txs),
 			"total_tx_bytes", finalProposal.Info.BlockSize,
@@ -174,7 +174,7 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, err
 		}
 
-		h.logger.Info(
+		h.logger.Debug(
 			"processed proposal",
 			"num_txs", len(finalProposal.Txs),
 			"total_tx_bytes", finalProposal.Info.BlockSize,
