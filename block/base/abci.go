@@ -17,7 +17,7 @@ func (l *BaseLane) PrepareLane(
 	proposal proposals.Proposal,
 	next block.PrepareLanesHandler,
 ) (proposals.Proposal, error) {
-	l.Logger().Info("preparing lane", "lane", l.Name())
+	l.Logger().Debug("preparing lane", "lane", l.Name())
 
 	// Select transactions from the lane respecting the selection logic of the lane and the
 	// max block space for the lane.
@@ -75,7 +75,7 @@ func (l *BaseLane) PrepareLane(
 		return proposal, err
 	}
 
-	l.Logger().Info(
+	l.Logger().Debug(
 		"lane prepared",
 		"lane", l.Name(),
 		"num_txs_added", len(txsToInclude),
@@ -96,7 +96,7 @@ func (l *BaseLane) ProcessLane(
 	txs []sdk.Tx,
 	next block.ProcessLanesHandler,
 ) (proposals.Proposal, error) {
-	l.Logger().Info(
+	l.Logger().Debug(
 		"processing lane",
 		"lane", l.Name(),
 		"num_txs_to_verify", len(txs),
