@@ -105,7 +105,7 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 			return &abci.ResponsePrepareProposal{Txs: make([][]byte, 0)}, err
 		}
 
-		h.logger.Debug(
+		h.logger.Info(
 			"prepared proposal",
 			"num_txs", len(finalProposal.Txs),
 			"total_tx_bytes", finalProposal.Info.BlockSize,
