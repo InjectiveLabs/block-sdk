@@ -5,8 +5,8 @@ import (
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
+	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log"
-
 	cmtabci "github.com/cometbft/cometbft/abci/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -127,10 +127,19 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 		}
 
 		consensusParams := sdkCtx.ConsensusParams()
-		laneSize := lane.GetMaxBlockSpace().MulInt64(consensusParams.GetBlock().GetMaxBytes()).TruncateInt64()
+		blockMaxBytes := consensusParams.GetBlock().GetMaxBytes()
+
+		var laneSizeBytes int64
+		if laneBlockSpace := lane.GetMaxBlockSpace(); laneBlockSpace.IsZero() {
+			// for default lane, we use the block max bytes
+			laneSizeBytes = blockMaxBytes
+		} else {
+			// for other lanes, we use the lane's max block space
+			laneSizeBytes = laneBlockSpace.MulInt64(blockMaxBytes).TruncateInt64()
+		}
 
 		txSize := int64(len(req.Tx))
-		if txSize > laneSize {
+		if txSize > laneSizeBytes {
 			if isReCheck && txInMempool {
 				removeTx = true
 			}
@@ -139,11 +148,11 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 				"tx size exceeds max block bytes",
 				"tx", tx,
 				"tx size", txSize,
-				"max bytes", laneSize,
+				"max bytes", laneSizeBytes,
 			)
 
 			return sdkerrors.ResponseCheckTxWithEvents(
-				fmt.Errorf("tx size exceeds max bytes for lane %s", lane.Name()),
+				errorsmod.Wrapf(sdkerrors.ErrTxTooLarge, "tx size exceeds max bytes for lane %s", lane.Name()),
 				0,
 				0,
 				nil,
