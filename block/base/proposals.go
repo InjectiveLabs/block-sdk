@@ -28,11 +28,15 @@ func NewDefaultProposalHandler(lane *BaseLane) *DefaultProposalHandler {
 func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 	return func(ctx sdk.Context, proposal proposals.Proposal, limit proposals.LaneLimits) ([]sdk.Tx, []sdk.Tx, error) {
 		var (
-			totalSize    int64
-			totalGas     uint64
-			txsToInclude []sdk.Tx
-			txsToRemove  []sdk.Tx
+			totalSize      int64
+			totalGas       uint64
+			txsToInclude   []sdk.Tx
+			txsToRemove    []sdk.Tx
+			skippedSigners = make(map[string]struct{})
 		)
+
+		// TODO(max): rewrite debugging to use LazyHash once this commit is available as part of cometbftv1 migration:
+		// https://github.com/cometbft/cometbft/commit/fad150950f1b6095b89e140e1286de027fe9778f
 
 		// Select all transactions in the mempool that are valid and not already in the
 		// partial proposal.
@@ -47,8 +51,20 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 				continue
 			}
 
+			// If the transaction is from a skipped sender, we skip it altogether. Allows to avoid sequence error when
+			// first skipped tx is not included in the proposal.
+			if _, ok := skippedSigners[string(txInfo.Signers[0].Signer.Bytes())]; ok {
+				h.lane.Logger().Debug(
+					"failed to select tx for lane; tx from skipped sender",
+					"tx_hash", txInfo.Hash,
+					"lane", h.lane.Name(),
+				)
+
+				continue
+			}
+
 			if txInfo.GasLimit > limit.MaxGasLimit {
-				h.lane.Logger().Info(
+				h.lane.Logger().Debug(
 					"failed to select tx for lane; gas limit above the maximum allowed",
 					"lane", h.lane.Name(),
 					"tx_gas", txInfo.GasLimit,
@@ -61,7 +77,7 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 			}
 
 			if txInfo.Size > limit.MaxTxBytes {
-				h.lane.Logger().Info(
+				h.lane.Logger().Debug(
 					"failed to select tx for lane; tx bytes above the maximum allowed",
 					"lane", h.lane.Name(),
 					"tx_size", txInfo.Size,
@@ -75,7 +91,7 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 
 			// Double check that the transaction belongs to this lane.
 			if !h.lane.Match(ctx, tx) {
-				h.lane.Logger().Info(
+				h.lane.Logger().Debug(
 					"failed to select tx for lane; tx does not belong to lane",
 					"tx_hash", txInfo.Hash,
 					"lane", h.lane.Name(),
@@ -87,7 +103,7 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 
 			// if the transaction is already in the (partial) block proposal, we skip it.
 			if proposal.Contains(txInfo.Hash) {
-				h.lane.Logger().Info(
+				h.lane.Logger().Debug(
 					"failed to select tx for lane; tx is already in proposal",
 					"tx_hash", txInfo.Hash,
 					"lane", h.lane.Name(),
@@ -96,9 +112,10 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 				continue
 			}
 
-			// If the transaction is too large, we break and do not attempt to include more txs.
+			// If the transaction is too large, we skip it,
+			// but also have to prevent anything from the same sender from being included during this iteration.
 			if updatedSize := totalSize + txInfo.Size; updatedSize > limit.MaxTxBytes {
-				h.lane.Logger().Info(
+				h.lane.Logger().Debug(
 					"failed to select tx for lane; tx bytes above the maximum allowed",
 					"lane", h.lane.Name(),
 					"tx_size", txInfo.Size,
@@ -107,13 +124,16 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 					"tx_hash", txInfo.Hash,
 				)
 
-				// TODO: Determine if there is any trade off with breaking or continuing here.
+				// using bytes representation of the signer to avoid unnecessary allocations
+				skippedSigners[string(txInfo.Signers[0].Signer.Bytes())] = struct{}{}
+
 				continue
 			}
 
-			// If the gas limit of the transaction is too large, we break and do not attempt to include more txs.
+			// If the gas limit of the transaction is too large, we skip it,
+			// but also have to prevent anything from the same sender from being included during this iteration.
 			if updatedGas := totalGas + txInfo.GasLimit; updatedGas > limit.MaxGasLimit {
-				h.lane.Logger().Info(
+				h.lane.Logger().Debug(
 					"failed to select tx for lane; gas limit above the maximum allowed",
 					"lane", h.lane.Name(),
 					"tx_gas", txInfo.GasLimit,
@@ -122,7 +142,9 @@ func (h *DefaultProposalHandler) PrepareLaneHandler() PrepareLaneHandler {
 					"tx_hash", txInfo.Hash,
 				)
 
-				// TODO: Determine if there is any trade off with breaking or continuing here.
+				// using bytes representation of the signer to avoid unnecessary allocations
+				skippedSigners[string(txInfo.Signers[0].Signer.Bytes())] = struct{}{}
+
 				continue
 			}
 
