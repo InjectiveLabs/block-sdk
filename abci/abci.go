@@ -174,7 +174,7 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, err
 		}
 
-		h.logger.Debug(
+		h.logger.Info(
 			"processed proposal",
 			"num_txs", len(finalProposal.Txs),
 			"total_tx_bytes", finalProposal.Info.BlockSize,
