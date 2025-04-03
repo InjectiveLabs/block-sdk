@@ -226,7 +226,7 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	mp.mux.Lock()
 	defer mp.mux.Unlock()
 
-	if mp.cfg.MaxTx > 0 && mp.CountTx() >= mp.cfg.MaxTx {
+	if mp.cfg.MaxTx > 0 && mp.priorityIndex.Len() >= mp.cfg.MaxTx {
 		return sdkmempool.ErrMempoolTxMaxCapacity
 	} else if mp.cfg.MaxTx < 0 {
 		return nil
@@ -378,9 +378,12 @@ func (i *PriorityNonceIterator[C]) Tx() sdk.Tx {
 // The maxBytes parameter defines the maximum number of bytes of transactions to
 // return.
 func (mp *PriorityNonceMempool[C]) Select(_ context.Context, _ [][]byte) sdkmempool.Iterator {
-	if mp.CountTx() == 0 {
+	mp.mux.RLock()
+	if mp.priorityIndex.Len() == 0 {
+		mp.mux.RUnlock()
 		return nil
 	}
+	mp.mux.RUnlock()
 
 	mp.reorderPriorityTies()
 
