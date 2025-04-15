@@ -2,6 +2,7 @@ package checktx
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 
@@ -54,7 +55,32 @@ func NewMempoolParityCheckTx(
 // CheckTx returns a CheckTx handler that wraps a given CheckTx handler and evicts txs that are not
 // in the app-side mempool on ReCheckTx.
 func (m MempoolParityCheckTx) CheckTx() CheckTx {
-	return func(req *cmtabci.RequestCheckTx) (*cmtabci.ResponseCheckTx, error) {
+	return func(req *cmtabci.RequestCheckTx) (checkRes *cmtabci.ResponseCheckTx, checkErr error) {
+		defer func(checkRes **cmtabci.ResponseCheckTx, checkErr *error) {
+			if r := recover(); r != nil {
+				m.logger.Error("panic in CheckTx (MempoolParityCheckTx)", "panic", r)
+				debug.PrintStack()
+
+				if err, ok := r.(error); ok {
+					*checkRes = sdkerrors.ResponseCheckTxWithEvents(
+						err,
+						0,
+						0,
+						nil,
+						true,
+					)
+				} else {
+					*checkRes = sdkerrors.ResponseCheckTxWithEvents(
+						fmt.Errorf("panic in CheckTx (MempoolParityCheckTx): %v", r),
+						0,
+						0,
+						nil,
+						true,
+					)
+				}
+			}
+		}(&checkRes, &checkErr)
+
 		// decode tx
 		tx, err := m.txDecoder(req.Tx)
 		if err != nil {
@@ -103,10 +129,16 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 
 		// run the checkTxHandler
 		res, checkTxError := m.checkTxHandler(req)
-		// if re-check fails for a transaction, we'll need to explicitly purge the tx from
-		// the app-side mempool
-		if isInvalidCheckTxExecution(res, checkTxError) && isReCheck && txInMempool {
-			removeTx = true
+
+		// can fail for a variety of reasons, check the results of the checkTxHandler
+		// need to remove from mempool if re-check fails and tx is in mempool.
+		if isInvalidCheckTxExecution(res, checkTxError) {
+			if isReCheck && txInMempool {
+				removeTx = true
+			}
+
+			m.logger.Debug("failed base checkTx", "err", checkTxError, "res", fmt.Sprintf("%+v", res))
+			return res, checkTxError
 		}
 
 		sdkCtx := m.GetContextForTx(req)
@@ -145,7 +177,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 			}
 
 			m.logger.Debug(
-				"tx size exceeds max block bytes",
+				"tx size exceeds max lane size bytes",
 				"tx", tx,
 				"tx size", txSize,
 				"max bytes", laneSizeBytes,
@@ -160,7 +192,7 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 			), nil
 		}
 
-		return res, checkTxError
+		return res, nil
 	}
 }
 
