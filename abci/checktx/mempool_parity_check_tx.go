@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"runtime/debug"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-
 	errorsmod "cosmossdk.io/errors"
 	"cosmossdk.io/log"
 	cmtabci "github.com/cometbft/cometbft/abci/types"
@@ -229,21 +227,6 @@ func isInvalidCheckTxExecution(resp *cmtabci.ResponseCheckTx, checkTxErr error) 
 // GetContextForTx is returns the latest committed state and sets the context given
 // the checkTx request.
 func (m MempoolParityCheckTx) GetContextForTx(req *cmtabci.RequestCheckTx) sdk.Context {
-	// Retrieve the commit multi-store which is used to retrieve the latest committed state.
-	ms := m.baseApp.CommitMultiStore().CacheMultiStore()
-
-	// Create a new context based off of the latest committed state.
-	header := cmtproto.Header{
-		Height:  m.baseApp.LastBlockHeight(),
-		ChainID: m.baseApp.ChainID(),
-	}
-	ctx, _ := sdk.NewContext(ms, header, true, m.baseApp.Logger()).CacheContext()
-
-	// Set the remaining important context values.
-	ctx = ctx.
-		WithTxBytes(req.Tx).
-		WithEventManager(sdk.NewEventManager()).
-		WithConsensusParams(m.baseApp.GetConsensusParams(ctx))
-
+	ctx, _ := m.baseApp.GetContextForCheckTx(req.Tx).CacheContext()
 	return ctx
 }

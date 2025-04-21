@@ -5,12 +5,10 @@ import (
 	"fmt"
 
 	cometabci "github.com/cometbft/cometbft/abci/types"
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	"cosmossdk.io/log"
-	storetypes "cosmossdk.io/store/types"
 
 	"github.com/skip-mev/block-sdk/v2/block"
 	mevlane "github.com/skip-mev/block-sdk/v2/lanes/mev"
@@ -53,20 +51,10 @@ type MEVLaneI interface {
 // BaseApp is an interface that allows us to call baseapp's CheckTx method
 // as well as retrieve the latest committed state.
 type BaseApp interface {
-	// CommitMultiStore is utilized to retrieve the latest committed state.
-	CommitMultiStore() storetypes.CommitMultiStore
-
 	// Logger is utilized to log errors.
 	Logger() log.Logger
 
-	// LastBlockHeight is utilized to retrieve the latest block height.
-	LastBlockHeight() int64
-
-	// GetConsensusParams is utilized to retrieve the consensus params.
-	GetConsensusParams(ctx sdk.Context) cmtproto.ConsensusParams
-
-	// ChainID is utilized to retrieve the chain ID.
-	ChainID() string
+	GetContextForCheckTx(txBytes []byte) sdk.Context
 }
 
 // NewMEVCheckTxHandler constructs a new CheckTxHandler instance. This method fails if the given LanedMempool does not have a lane
@@ -271,31 +259,6 @@ func (handler *MEVCheckTxHandler) ValidateBidTx(ctx sdk.Context, bidTx sdk.Tx, b
 // GetContextForBidTx is returns the latest committed state and sets the context given
 // the checkTx request.
 func (handler *MEVCheckTxHandler) GetContextForBidTx(req *cometabci.RequestCheckTx) sdk.Context {
-	// Retrieve the commit multi-store which is used to retrieve the latest committed state.
-	ms := handler.baseApp.CommitMultiStore().CacheMultiStore()
-
-	// Create a new context based off of the latest committed state.
-	header := cmtproto.Header{
-		Height:  handler.baseApp.LastBlockHeight(),
-		ChainID: handler.baseApp.ChainID(),
-	}
-	ctx, _ := sdk.NewContext(ms, header, true, handler.baseApp.Logger()).CacheContext()
-
-	// Set the context to the correct checking mode.
-	switch req.Type {
-	case cometabci.CheckTxType_New:
-		ctx = ctx.WithIsCheckTx(true)
-	case cometabci.CheckTxType_Recheck:
-		ctx = ctx.WithIsReCheckTx(true)
-	default:
-		panic("unknown check tx type")
-	}
-
-	// Set the remaining important context values.
-	ctx = ctx.
-		WithTxBytes(req.Tx).
-		WithEventManager(sdk.NewEventManager()).
-		WithConsensusParams(handler.baseApp.GetConsensusParams(ctx))
-
+	ctx, _ := handler.baseApp.GetContextForCheckTx(req.Tx).CacheContext()
 	return ctx
 }
