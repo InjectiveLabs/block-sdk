@@ -1,6 +1,7 @@
 package checktx
 
 import (
+	"errors"
 	"fmt"
 	"runtime/debug"
 
@@ -220,7 +221,9 @@ func (m MempoolParityCheckTx) matchLane(ctx sdk.Context, tx sdk.Tx) (block.Lane,
 }
 
 func isInvalidCheckTxExecution(resp *cmtabci.ResponseCheckTx, checkTxErr error) bool {
-	return resp == nil || resp.Code != 0 || checkTxErr != nil
+	return resp == nil ||
+		// we ignore ErrWrongSequence cause it means we failed optimistic recheck
+		((resp.Code != 0 || checkTxErr != nil) && !errors.Is(checkTxErr, sdkerrors.ErrWrongSequence))
 }
 
 // GetContextForTx is returns the latest committed state and sets the context given
