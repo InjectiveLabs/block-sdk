@@ -296,9 +296,11 @@ func (mp *PriorityNonceMempool[C]) Insert(ctx context.Context, tx sdk.Tx) error 
 	return nil
 }
 
-func (i *PriorityNonceIterator[C]) iteratePriority() sdkmempool.Iterator {
-	i.mempool.mux.RLock()
-	defer i.mempool.mux.RUnlock()
+func (i *PriorityNonceIterator[C]) iteratePriority(skipLock bool) sdkmempool.Iterator {
+	if !skipLock {
+		i.mempool.mux.RLock()
+		defer i.mempool.mux.RUnlock()
+	}
 
 	// beginning of priority iteration
 	if i.priorityNode == nil {
@@ -321,12 +323,14 @@ func (i *PriorityNonceIterator[C]) iteratePriority() sdkmempool.Iterator {
 		i.nextPriority = i.mempool.cfg.TxPriority.MinValue
 	}
 
-	return i.Next()
+	return i.next(skipLock)
 }
 
-func (i *PriorityNonceIterator[C]) Next() sdkmempool.Iterator {
-	i.mempool.mux.RLock()
-	defer i.mempool.mux.RUnlock()
+func (i *PriorityNonceIterator[C]) next(skipLock bool) sdkmempool.Iterator {
+	if !skipLock {
+		i.mempool.mux.RLock()
+		defer i.mempool.mux.RUnlock()
+	}
 
 	if i.priorityNode == nil {
 		return nil
@@ -343,7 +347,7 @@ func (i *PriorityNonceIterator[C]) Next() sdkmempool.Iterator {
 
 	// end of sender iteration
 	if cursor == nil {
-		return i.iteratePriority()
+		return i.iteratePriority(true)
 	}
 
 	key := cursor.Key().(txMeta[C])
@@ -352,19 +356,23 @@ func (i *PriorityNonceIterator[C]) Next() sdkmempool.Iterator {
 	// priority in the pool.
 	if i.priorityNode.Next() != nil {
 		if i.mempool.cfg.TxPriority.Compare(key.priority, i.nextPriority) < 0 {
-			return i.iteratePriority()
+			return i.iteratePriority(true)
 		} else if i.mempool.cfg.TxPriority.Compare(key.priority, i.nextPriority) == 0 {
 			// Weight is incorporated into the priority index key only (not sender index)
 			// so we must fetch it here from the scores map.
 			weight := i.mempool.scores[txMeta[C]{nonce: key.nonce, sender: key.sender}].weight
 			if i.mempool.cfg.TxPriority.Compare(weight, i.priorityNode.Next().Key().(txMeta[C]).weight) < 0 {
-				return i.iteratePriority()
+				return i.iteratePriority(true)
 			}
 		}
 	}
 
 	i.senderCursors[i.sender] = cursor
 	return i
+}
+
+func (i *PriorityNonceIterator[C]) Next() sdkmempool.Iterator {
+	return i.next(false)
 }
 
 func (i *PriorityNonceIterator[C]) Tx() sdk.Tx {
@@ -378,12 +386,12 @@ func (i *PriorityNonceIterator[C]) Tx() sdk.Tx {
 // The maxBytes parameter defines the maximum number of bytes of transactions to
 // return.
 func (mp *PriorityNonceMempool[C]) Select(_ context.Context, _ [][]byte) sdkmempool.Iterator {
-	mp.mux.RLock()
+	mp.mux.Lock()
+	defer mp.mux.Unlock()
+
 	if mp.priorityIndex.Len() == 0 {
-		mp.mux.RUnlock()
 		return nil
 	}
-	mp.mux.RUnlock()
 
 	mp.reorderPriorityTies()
 
@@ -392,7 +400,7 @@ func (mp *PriorityNonceMempool[C]) Select(_ context.Context, _ [][]byte) sdkmemp
 		senderCursors: make(map[string]*skiplist.Element),
 	}
 
-	return iterator.iteratePriority()
+	return iterator.iteratePriority(true)
 }
 
 type reorderKey[C comparable] struct {
@@ -402,9 +410,6 @@ type reorderKey[C comparable] struct {
 }
 
 func (mp *PriorityNonceMempool[C]) reorderPriorityTies() {
-	mp.mux.Lock()
-	defer mp.mux.Unlock()
-
 	node := mp.priorityIndex.Front()
 
 	var reordering []reorderKey[C]
