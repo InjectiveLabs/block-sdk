@@ -129,6 +129,10 @@ func (m MempoolParityCheckTx) CheckTx() CheckTx {
 		// run the checkTxHandler
 		res, checkTxError := m.checkTxHandler(req)
 
+		if optimisticRechekFailed(res, checkTxError) {
+			return res, checkTxError
+		}
+
 		// can fail for a variety of reasons, check the results of the checkTxHandler
 		// need to remove from mempool if re-check fails and tx is in mempool.
 		if isInvalidCheckTxExecution(res, checkTxError) {
@@ -218,10 +222,12 @@ func (m MempoolParityCheckTx) matchLane(ctx sdk.Context, tx sdk.Tx) (block.Lane,
 	return lane, nil
 }
 
+func optimisticRechekFailed(resp *cmtabci.ResponseCheckTx, checkTxErr error) bool {
+	return resp != nil && resp.Code != 0 && errors.Is(checkTxErr, sdkerrors.ErrWrongSequence)
+}
+
 func isInvalidCheckTxExecution(resp *cmtabci.ResponseCheckTx, checkTxErr error) bool {
-	return resp == nil ||
-		// we ignore ErrWrongSequence cause it means we failed optimistic recheck
-		((resp.Code != 0 || checkTxErr != nil) && !errors.Is(checkTxErr, sdkerrors.ErrWrongSequence))
+	return resp == nil || resp.Code != 0 || checkTxErr != nil
 }
 
 // GetContextForTx is returns the latest committed state and sets the context given
