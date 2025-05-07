@@ -71,9 +71,9 @@ func New(
 // a boundary on the number of bytes that can be included in the proposal and will include all
 // valid transactions in the proposal (up to MaxBlockSize, MaxGasLimit).
 func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
-	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (resp *abci.ResponsePrepareProposal, err error) {
+	return func(ctx sdk.Context, req *abci.PrepareProposalRequest) (resp *abci.PrepareProposalResponse, err error) {
 		if req.Height <= 1 {
-			return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
+			return &abci.PrepareProposalResponse{Txs: req.Txs}, nil
 		}
 
 		// In the case where there is a panic, we recover here and return an empty proposal.
@@ -82,7 +82,7 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 				h.logger.Error("failed to prepare proposal", "err", err)
 
 				// TODO: Should we attempt to return a empty proposal here with empty proposal info?
-				resp = &abci.ResponsePrepareProposal{Txs: make([][]byte, 0)}
+				resp = &abci.PrepareProposalResponse{Txs: make([][]byte, 0)}
 				err = fmt.Errorf("failed to prepare proposal: %v", rec)
 			}
 		}()
@@ -102,10 +102,10 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 		finalProposal, err := prepareLanesHandler(ctx, proposal)
 		if err != nil {
 			h.logger.Error("failed to prepare proposal", "err", err)
-			return &abci.ResponsePrepareProposal{Txs: make([][]byte, 0)}, err
+			return &abci.PrepareProposalResponse{Txs: make([][]byte, 0)}, err
 		}
 
-		h.logger.Info(
+		h.logger.Debug(
 			"prepared proposal",
 			"num_txs", len(finalProposal.Txs),
 			"total_tx_bytes", finalProposal.Info.BlockSize,
@@ -121,7 +121,7 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 			"height", req.Height,
 		)
 
-		return &abci.ResponsePrepareProposal{
+		return &abci.PrepareProposalResponse{
 			Txs: finalProposal.Txs,
 		}, nil
 	}
@@ -138,9 +138,9 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 		return baseapp.NoOpProcessProposal()
 	}
 
-	return func(ctx sdk.Context, req *abci.RequestProcessProposal) (resp *abci.ResponseProcessProposal, err error) {
+	return func(ctx sdk.Context, req *abci.ProcessProposalRequest) (resp *abci.ProcessProposalResponse, err error) {
 		if req.Height <= 1 {
-			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_ACCEPT}, nil
+			return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 		}
 
 		// In the case where any of the lanes panic, we recover here and return a reject status.
@@ -148,7 +148,7 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 			if rec := recover(); rec != nil {
 				h.logger.Error("failed to process proposal", "recover_err", rec)
 
-				resp = &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}
+				resp = &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}
 				err = fmt.Errorf("failed to process proposal: %v", rec)
 			}
 		}()
@@ -157,7 +157,7 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 		decodedTxs, err := utils.GetDecodedTxs(h.txDecoder, req.Txs)
 		if err != nil {
 			h.logger.Error("failed to decode txs", "err", err)
-			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, err
+			return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, err
 		}
 
 		// Build handler that will verify the partial proposals according to each lane's verification logic.
@@ -171,10 +171,10 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 		)
 		if err != nil {
 			h.logger.Error("failed to validate the proposal", "err", err)
-			return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_REJECT}, err
+			return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_REJECT}, err
 		}
 
-		h.logger.Info(
+		h.logger.Debug(
 			"processed proposal",
 			"num_txs", len(finalProposal.Txs),
 			"total_tx_bytes", finalProposal.Info.BlockSize,
@@ -184,6 +184,6 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 			"height", req.Height,
 		)
 
-		return &abci.ResponseProcessProposal{Status: abci.ResponseProcessProposal_ACCEPT}, nil
+		return &abci.ProcessProposalResponse{Status: abci.PROCESS_PROPOSAL_STATUS_ACCEPT}, nil
 	}
 }
