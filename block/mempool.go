@@ -2,6 +2,7 @@ package block
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"cosmossdk.io/log"
@@ -106,8 +107,8 @@ laneMatching:
 			}
 			for _, signerData := range signersData {
 				if m.txIndex.DoesExistInLowerPriorityLane(signerData.Signer.String(), index) {
-
-					// If the transaction exists in a lower priority lane, do not insert it.
+					// If the transaction exists in a lower priority lane, we let
+					// it trickle down until it reaches that lane.
 					// This is because it could cause account sequence mismatches.
 					continue laneMatching
 				}
@@ -116,6 +117,11 @@ laneMatching:
 
 			err = lane.Insert(ctx, tx)
 			if err != nil {
+				if errors.Is(err, sdkmempool.ErrMempoolTxMaxCapacity) {
+					// if the lane is at capacity, we let it trickle down to the
+					// next lane.
+					continue laneMatching
+				}
 				return err
 			}
 
