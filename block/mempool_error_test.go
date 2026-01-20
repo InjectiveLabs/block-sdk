@@ -124,6 +124,7 @@ func TestLanedMempoolInsertReturnsSignerError(t *testing.T) {
 		name:            "test",
 		match:           true,
 		signerExtractor: errorSignerAdapter{},
+		maxBlockSpace:   math.LegacyZeroDec(),
 	}
 
 	mempool, err := block.NewLanedMempool(
@@ -132,7 +133,7 @@ func TestLanedMempoolInsertReturnsSignerError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = mempool.Insert(context.Background(), EmptyTx{})
+	err = mempool.Insert(sdk.WrapSDKContext(sdk.Context{}), EmptyTx{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to extract signers upon insertion")
 }
@@ -142,6 +143,7 @@ func TestLanedMempoolRemoveReturnsSignerError(t *testing.T) {
 		name:            "test",
 		contains:        true,
 		signerExtractor: errorSignerAdapter{},
+		maxBlockSpace:   math.LegacyZeroDec(),
 	}
 
 	mempool, err := block.NewLanedMempool(
@@ -160,6 +162,7 @@ func TestLanedMempoolInsertRejectsEmptySigners(t *testing.T) {
 		name:            "test",
 		match:           true,
 		signerExtractor: emptySignerAdapter{},
+		maxBlockSpace:   math.LegacyZeroDec(),
 	}
 
 	mempool, err := block.NewLanedMempool(
@@ -168,7 +171,7 @@ func TestLanedMempoolInsertRejectsEmptySigners(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = mempool.Insert(context.Background(), EmptyTx{})
+	err = mempool.Insert(sdk.WrapSDKContext(sdk.Context{}), EmptyTx{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no signers found for tx during insertion")
 }
@@ -178,6 +181,7 @@ func TestLanedMempoolRemoveRejectsEmptySigners(t *testing.T) {
 		name:            "test",
 		contains:        true,
 		signerExtractor: emptySignerAdapter{},
+		maxBlockSpace:   math.LegacyZeroDec(),
 	}
 
 	mempool, err := block.NewLanedMempool(
