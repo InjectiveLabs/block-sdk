@@ -103,7 +103,7 @@ laneMatching:
 			signersData, err := lane.SignerExtractor().GetSigners(tx)
 			if err != nil {
 				m.logger.Error("failed to extract signers upon insertion for tx", "tx", tx, "err", err)
-				return nil
+				return fmt.Errorf("failed to extract signers upon insertion for tx: %w", err)
 			}
 			for _, signerData := range signersData {
 				if m.txIndex.DoesExistInLowerPriorityLane(signerData.Signer.String(), index) {
@@ -170,7 +170,7 @@ func (m *LanedMempool) Remove(tx sdk.Tx) (err error) {
 			signersData, err := lane.SignerExtractor().GetSigners(tx)
 			if err != nil {
 				m.logger.Error("failed to extract signers upon removal for tx", "tx", tx, "err", err)
-				return nil
+				return fmt.Errorf("failed to extract signers upon removal for tx: %w", err)
 			}
 
 			sig := signersData[0]
