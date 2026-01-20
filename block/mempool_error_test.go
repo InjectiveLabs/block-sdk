@@ -24,6 +24,12 @@ func (errorSignerAdapter) GetSigners(sdk.Tx) ([]signerextraction.SignerData, err
 	return nil, fmt.Errorf("boom")
 }
 
+type emptySignerAdapter struct{}
+
+func (emptySignerAdapter) GetSigners(sdk.Tx) ([]signerextraction.SignerData, error) {
+	return []signerextraction.SignerData{}, nil
+}
+
 type testLane struct {
 	name            string
 	match           bool
@@ -147,4 +153,40 @@ func TestLanedMempoolRemoveReturnsSignerError(t *testing.T) {
 	err = mempool.Remove(EmptyTx{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to extract signers upon removal")
+}
+
+func TestLanedMempoolInsertRejectsEmptySigners(t *testing.T) {
+	lane := &testLane{
+		name:            "test",
+		match:           true,
+		signerExtractor: emptySignerAdapter{},
+	}
+
+	mempool, err := block.NewLanedMempool(
+		log.NewNopLogger(),
+		[]block.Lane{lane},
+	)
+	require.NoError(t, err)
+
+	err = mempool.Insert(context.Background(), EmptyTx{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no signers found for tx during insertion")
+}
+
+func TestLanedMempoolRemoveRejectsEmptySigners(t *testing.T) {
+	lane := &testLane{
+		name:            "test",
+		contains:        true,
+		signerExtractor: emptySignerAdapter{},
+	}
+
+	mempool, err := block.NewLanedMempool(
+		log.NewNopLogger(),
+		[]block.Lane{lane},
+	)
+	require.NoError(t, err)
+
+	err = mempool.Remove(EmptyTx{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no signers found for tx during removal")
 }
