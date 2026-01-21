@@ -31,6 +31,15 @@ func (idx *TxIndex) Insert(signer string, laneName string, lanePriority int, fir
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 
+	if entries, ok := idx.index[signer]; ok {
+		for _, entry := range entries {
+			if entry.LaneName == laneName && entry.FirstSignerIdentifier == firstSignerIdentifier && entry.FirstSignerNonce == firstSignerNonce {
+				entry.LanePriority = lanePriority
+				return
+			}
+		}
+	}
+
 	entry := &LaneTxEntry{
 		LaneName:              laneName,
 		LanePriority:          lanePriority,
@@ -50,12 +59,14 @@ func (idx *TxIndex) Remove(signer string, laneName string, firstSignerIdentifier
 		return
 	}
 
-	for i, entry := range entries {
+	filtered := entries[:0]
+	for _, entry := range entries {
 		if entry.LaneName == laneName && entry.FirstSignerIdentifier == firstSignerIdentifier && entry.FirstSignerNonce == firstSignerNonce {
-			entries = append(entries[:i], entries[i+1:]...)
-			break
+			continue
 		}
+		filtered = append(filtered, entry)
 	}
+	entries = filtered
 
 	if len(entries) == 0 {
 		delete(idx.index, signer)
