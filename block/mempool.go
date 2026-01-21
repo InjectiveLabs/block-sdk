@@ -96,6 +96,7 @@ func (m *LanedMempool) Insert(ctx context.Context, tx sdk.Tx) (err error) {
 	}()
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	var capacityErr error
 
 laneMatching:
 	for index, lane := range m.registry {
@@ -123,6 +124,7 @@ laneMatching:
 				if errors.Is(err, sdkmempool.ErrMempoolTxMaxCapacity) {
 					// if the lane is at capacity, we let it trickle down to the
 					// next lane.
+					capacityErr = err
 					continue laneMatching
 				}
 				return err
@@ -140,6 +142,9 @@ laneMatching:
 		}
 	}
 
+	if capacityErr != nil {
+		return capacityErr
+	}
 	return nil
 }
 

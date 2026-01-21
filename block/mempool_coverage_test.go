@@ -50,6 +50,26 @@ func TestLanedMempoolInsertTricklesOnCapacity(t *testing.T) {
 	require.Equal(t, 1, defaultLane.CountTx())
 }
 
+func TestLanedMempoolInsertReturnsCapacityErrorWhenNoLaneAccepts(t *testing.T) {
+	signer := signerextraction.SignerData{Signer: sdk.AccAddress("addr1"), Sequence: 1}
+	adapter := staticSignerAdapter{signers: []signerextraction.SignerData{signer}}
+
+	priorityLane := &testLane{
+		name:            "priority",
+		match:           true,
+		insertErr:       sdkmempool.ErrMempoolTxMaxCapacity,
+		signerExtractor: adapter,
+		maxBlockSpace:   math.LegacyOneDec(),
+	}
+
+	mempool, err := block.NewLanedMempool(log.NewNopLogger(), []block.Lane{priorityLane})
+	require.NoError(t, err)
+
+	err = mempool.Insert(sdk.WrapSDKContext(sdk.Context{}), EmptyTx{})
+	require.ErrorIs(t, err, sdkmempool.ErrMempoolTxMaxCapacity)
+	require.Equal(t, 0, priorityLane.CountTx())
+}
+
 func TestLanedMempoolInsertSkipsHigherLaneWhenLowerExists(t *testing.T) {
 	signer := signerextraction.SignerData{Signer: sdk.AccAddress("addr1"), Sequence: 1}
 	adapter := staticSignerAdapter{signers: []signerextraction.SignerData{signer}}
