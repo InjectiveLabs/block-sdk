@@ -2,6 +2,7 @@ package block
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"cosmossdk.io/log"
@@ -102,12 +103,15 @@ laneMatching:
 			signersData, err := lane.SignerExtractor().GetSigners(tx)
 			if err != nil {
 				m.logger.Error("failed to extract signers upon insertion for tx", "tx", tx, "err", err)
-				return nil
+				return fmt.Errorf("failed to extract signers upon insertion for tx: %w", err)
+			}
+			if len(signersData) == 0 {
+				return fmt.Errorf("no signers found for tx during insertion")
 			}
 			for _, signerData := range signersData {
 				if m.txIndex.DoesExistInLowerPriorityLane(signerData.Signer.String(), index) {
-
-					// If the transaction exists in a lower priority lane, do not insert it.
+					// If the transaction exists in a lower priority lane, we let
+					// it trickle down until it reaches that lane.
 					// This is because it could cause account sequence mismatches.
 					continue laneMatching
 				}
@@ -116,6 +120,11 @@ laneMatching:
 
 			err = lane.Insert(ctx, tx)
 			if err != nil {
+				if errors.Is(err, sdkmempool.ErrMempoolTxMaxCapacity) {
+					// if the lane is at capacity, we let it trickle down to the
+					// next lane.
+					continue laneMatching
+				}
 				return err
 			}
 
@@ -164,7 +173,10 @@ func (m *LanedMempool) Remove(tx sdk.Tx) (err error) {
 			signersData, err := lane.SignerExtractor().GetSigners(tx)
 			if err != nil {
 				m.logger.Error("failed to extract signers upon removal for tx", "tx", tx, "err", err)
-				return nil
+				return fmt.Errorf("failed to extract signers upon removal for tx: %w", err)
+			}
+			if len(signersData) == 0 {
+				return fmt.Errorf("no signers found for tx during removal")
 			}
 
 			sig := signersData[0]
