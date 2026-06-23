@@ -33,7 +33,7 @@ func (l *BaseLane) GetTxInfo(ctx sdk.Context, tx sdk.Tx) (utils.TxWithInfo, erro
 
 	return utils.TxWithInfo{
 		Hash:     strings.ToUpper(hex.EncodeToString(comettypes.Tx(txBytes).Hash())),
-		Size:     int64(len(txBytes)),
+		Size:     comettypes.ComputeProtoSizeForTxs([]comettypes.Tx{txBytes}),
 		GasLimit: gasTx.GetGas(),
 		TxBytes:  txBytes,
 		Priority: l.LaneMempool.Priority(ctx, tx),
