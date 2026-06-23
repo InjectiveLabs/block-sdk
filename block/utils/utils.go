@@ -17,7 +17,7 @@ import (
 type TxWithInfo struct {
 	// Hash is the hex-encoded hash of the transaction.
 	Hash string
-	// Size is the size of the transaction in bytes.
+	// Size is the transaction's contribution to CometBFT protobuf Data.Txs bytes.
 	Size int64
 	// GasLimit is the gas limit of the transaction.
 	GasLimit uint64
